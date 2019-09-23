@@ -15,8 +15,6 @@ class Renderer {
     var webgl = Renderer.sWebgl
     webgl.useProgram(Renderer.sProgram) // 要放在片段着色器前面调用
 
-    this._setTransform()
-    this._setColor()
     this._doDraw()
   }
 
@@ -52,68 +50,40 @@ class Renderer {
     Renderer.sProgram = programObject
   }
 
-  _setTransform () {
-    var webgl = Renderer.sWebgl
-    var mvMatrix = mat4.create()
-    mat4.identity(mvMatrix)
-    mat4.rotate(mvMatrix, Math.PI * 45 / 180, [0, 0, 1]) // 角度为正表示逆时针    
-    mat4.translate(mvMatrix, [0.5, 0, 0]) // 沿X轴平移0.5的距离
-
-    webgl.uniformMatrix4fv(webgl.getUniformLocation(Renderer.sProgram, 'mvMatrix'), false, mvMatrix)
-  }
-
   /**
-   * 只有描点时才能设置 gl_PointSize
-   */
-  _setSize () {
-    var webgl = Renderer.sWebgl
-    var a_PointSize = webgl.getAttribLocation(Renderer.sProgram, 'a_PointSize')
-    if (a_PointSize < 0) {
-      window.alert('Failed to get the storage location of a_PointSize')
-      return
-    }
-    webgl.vertexAttrib1f(a_PointSize, 10.0)
-  }
-
-  _setColor () {
-    var webgl = Renderer.sWebgl
-    var u_FragColor = webgl.getUniformLocation(Renderer.sProgram, 'u_FragColor')
-    if (u_FragColor == null) { // 不是 -1
-      window.alert('Failed to get the storage location of u_FragColor')
-      return
-    }
-    webgl.uniform4f(u_FragColor, 1.0, 0.0, 1.0, 1.0)
-  }
-
-    /**
    * 使用缓冲区对象一次性绘制多个顶点
    */
   _initVertexBuffers () {
     var webgl = Renderer.sWebgl
 
     // 三个顶点
-    var vertices = [
-      -0.5, 0.5, 
-      -0.5, -0.5,
-      0.5, 0.5
-    ]
-
-    // 每个顶点的分量个数（1 到 4）
-    var size = 2
+    var vertices = new Float32Array([
+      0, 0.5, 10, 1.0, 0.0, 0.0,
+      -0.5, -0.5, 20, 0.0, 1.0, 0.0,
+      0.5, -0.5, 30, 0.0, 0.0, 1.0
+    ])
 
     // 创建缓冲区对象
     var buffer = webgl.createBuffer()
     // 将缓冲区对象绑定到 "目标"(即webgl.ARRAY_BUFFER)
     webgl.bindBuffer(webgl.ARRAY_BUFFER, buffer)
     // 向缓冲区对象中写入数据（不能直接向缓冲区写入数据， 只能向 “目标写入”）
-    webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(vertices), webgl.STATIC_DRAW)
+    webgl.bufferData(webgl.ARRAY_BUFFER, vertices, webgl.STATIC_DRAW)
     
+    const FSIZE = vertices.BYTES_PER_ELEMENT
+
     var a_Position = webgl.getAttribLocation(Renderer.sProgram, 'a_Position')
-    // 将缓冲区对象(引用或指针)分配给 a_Position 变量
-    webgl.vertexAttribPointer(a_Position, size, webgl.FLOAT, false, 0, 0)
-    // 激活 a_Position 变量，使分配生效
-    webgl.enableVertexAttribArray(a_Position)    
-    return vertices.length / size
+    // 使用 2 个数据，每6个数据代表一个顶点数据（FSIZE * 6表示相邻顶点之间的字节数，默认为0），a_Position是从第0个开始
+    webgl.vertexAttribPointer(a_Position, 2, webgl.FLOAT, false, FSIZE * 6, 0)
+    webgl.enableVertexAttribArray(a_Position) 
+    
+    var a_PointSize = webgl.getAttribLocation(Renderer.sProgram, 'a_PointSize')
+    webgl.vertexAttribPointer(a_PointSize, 1, webgl.FLOAT, false, FSIZE * 6, FSIZE * 2)
+    webgl.enableVertexAttribArray(a_PointSize) 
+
+    var a_Color = webgl.getAttribLocation(Renderer.sProgram, 'a_Color')
+    webgl.vertexAttribPointer(a_Color, 3, webgl.FLOAT, false, FSIZE * 6, FSIZE * 3)
+    webgl.enableVertexAttribArray(a_Color)
   }
 
   _doDraw () {
@@ -136,19 +106,23 @@ class Renderer {
 Renderer.sVshPgm = [
   'precision mediump float;',
   'attribute vec4 a_Position;',
-  'uniform mat4 mvMatrix;',
+  'attribute float a_PointSize;',
+  'attribute vec4 a_Color;',
+  'varying vec4 v_Color;',
   'void main()',
   '{',
-  '   gl_Position = mvMatrix * a_Position;', // 设置坐标
+  '   gl_Position = a_Position;', // 设置坐标
+  '   gl_PointSize = a_PointSize;',
+  '   v_Color = a_Color;',
   '}'
 ].join('\n')
 
 // fragment shader program
 Renderer.sFshPgm = [
   'precision mediump float;',
-  'uniform vec4 u_FragColor;',
+  'varying vec4 v_Color;',
   'void main()',
   '{',
-  '   gl_FragColor = u_FragColor;',
+  '   gl_FragColor = v_Color;',
   '}'
 ].join('\n')
