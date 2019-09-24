@@ -15,9 +15,13 @@ class Renderer {
     var webgl = Renderer.sWebgl
     webgl.useProgram(Renderer.sProgram) // 要放在片段着色器前面调用
 
-    this._setTransform()
-    this._setColor()
-    this._doDraw()
+    loadImage('https://cn.bing.com/th?id=OHR.FeatherSerpent_ZH-CN5706017355_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp')
+    .then((image) => {
+      this._loadTexture(image)
+      this._doDraw()
+      // var ctx = this._canvas.getContext('2d')
+      // ctx && ctx.drawImage(image, 0, 0)
+    })
   }
 
   /**
@@ -52,68 +56,55 @@ class Renderer {
     Renderer.sProgram = programObject
   }
 
-  _setTransform () {
-    var webgl = Renderer.sWebgl
-    var mvMatrix = mat4.create()
-    mat4.identity(mvMatrix)
-    mat4.rotate(mvMatrix, Math.PI * 45 / 180, [0, 0, 1]) // 角度为正表示逆时针    
-    mat4.translate(mvMatrix, [0.5, 0, 0]) // 沿X轴平移0.5的距离
-
-    webgl.uniformMatrix4fv(webgl.getUniformLocation(Renderer.sProgram, 'mvMatrix'), false, mvMatrix)
-  }
-
   /**
-   * 只有描点时才能设置 gl_PointSize
-   */
-  _setSize () {
-    var webgl = Renderer.sWebgl
-    var a_PointSize = webgl.getAttribLocation(Renderer.sProgram, 'a_PointSize')
-    if (a_PointSize < 0) {
-      window.alert('Failed to get the storage location of a_PointSize')
-      return
-    }
-    webgl.vertexAttrib1f(a_PointSize, 10.0)
-  }
-
-  _setColor () {
-    var webgl = Renderer.sWebgl
-    var u_FragColor = webgl.getUniformLocation(Renderer.sProgram, 'u_FragColor')
-    if (u_FragColor == null) { // 不是 -1
-      window.alert('Failed to get the storage location of u_FragColor')
-      return
-    }
-    webgl.uniform4f(u_FragColor, 1.0, 0.0, 1.0, 1.0)
-  }
-
-    /**
    * 使用缓冲区对象一次性绘制多个顶点
    */
   _initVertexBuffers () {
     var webgl = Renderer.sWebgl
 
-    // 三个顶点
-    var vertices = [
-      -0.5, 0.5, 
+    var vertices = new Float32Array([
+      // 顶点坐标，纹理坐标可由顶点坐标坐标变换得到
+      -0.5, 0.5,
       -0.5, -0.5,
-      0.5, 0.5
-    ]
-
-    // 每个顶点的分量个数（1 到 4）
-    var size = 2
+      0.5, 0.5,
+      0.5, -0.5
+    ])
 
     // 创建缓冲区对象
     var buffer = webgl.createBuffer()
-    // 将缓冲区对象绑定到 "目标"(即webgl.ARRAY_BUFFER)
     webgl.bindBuffer(webgl.ARRAY_BUFFER, buffer)
-    // 向缓冲区对象中写入数据（不能直接向缓冲区写入数据， 只能向 “目标写入”）
-    webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(vertices), webgl.STATIC_DRAW)
+    webgl.bufferData(webgl.ARRAY_BUFFER, vertices, webgl.STATIC_DRAW)
     
     var a_Position = webgl.getAttribLocation(Renderer.sProgram, 'a_Position')
-    // 将缓冲区对象(引用或指针)分配给 a_Position 变量
-    webgl.vertexAttribPointer(a_Position, size, webgl.FLOAT, false, 0, 0)
-    // 激活 a_Position 变量，使分配生效
-    webgl.enableVertexAttribArray(a_Position)    
-    return vertices.length / size
+    webgl.vertexAttribPointer(a_Position, 2, webgl.FLOAT, false, 0, 0)
+    webgl.enableVertexAttribArray(a_Position) 
+  }
+
+  _loadTexture(image) {
+    var gl = Renderer.sWebgl
+
+    var textureObj = gl.createTexture() // 创建纹理对象
+    var imageTexture = gl.getUniformLocation(Renderer.sProgram, 'imageTexture')
+    
+    gl.activeTexture(gl.TEXTURE0) // 开启0号纹理单元
+    // 向targe绑定纹理对象，TEXTURE_2D 表示二维纹理
+    gl.bindTexture(gl.TEXTURE_2D, textureObj)
+    // 对纹理图像进行Y轴反转， 因为webgl坐标系统与图片（png、jpg等）的坐标系统的 Y 轴方向是相反的
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    
+    // 配置纹理参数
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    /**
+     * 将纹理图像（image）分配给纹理对象（TEXTURE_2D），同时告诉webgl一些图像的特性
+     * gl.RGB 表示图像的内部格式
+     */
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
+    
+    gl.uniform1i(imageTexture, 0) // 将 0 号纹理传给着色器
   }
 
   _doDraw () {
@@ -125,7 +116,7 @@ class Renderer {
 
     webgl.clearColor(0.0, 1.0, 1.0, 1.0)
     webgl.clear(webgl.COLOR_BUFFER_BIT)
-    webgl.drawArrays(webgl.TRIANGLES, 0, 3) // 绘制三角形，从第1个顶点开始绘制3个顶点
+    webgl.drawArrays(webgl.TRIANGLE_STRIP, 0, 4) // 绘制三角形，从第1个顶点开始绘制3个顶点
 
     var ctx = this._canvas.getContext('2d')
     ctx && ctx.drawImage(Renderer.sCanvas, 0, 0)
@@ -136,19 +127,21 @@ class Renderer {
 Renderer.sVshPgm = [
   'precision mediump float;',
   'attribute vec4 a_Position;',
-  'uniform mat4 mvMatrix;',
+  'varying vec2 v_TexCoord;',
   'void main()',
   '{',
-  '   gl_Position = mvMatrix * a_Position;', // 设置坐标
+  '   gl_Position = a_Position;', // 设置坐标
+  '   v_TexCoord = vec2(a_Position.x + 0.5, a_Position.y + 0.5);',
   '}'
 ].join('\n')
 
 // fragment shader program
 Renderer.sFshPgm = [
   'precision mediump float;',
-  'uniform vec4 u_FragColor;',
+  'varying vec2 v_TexCoord;',
+  'uniform sampler2D imageTexture;',
   'void main()',
   '{',
-  '   gl_FragColor = u_FragColor;',
+  '   gl_FragColor = texture2D(imageTexture, v_TexCoord);',
   '}'
 ].join('\n')
