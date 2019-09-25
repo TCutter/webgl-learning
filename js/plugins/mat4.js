@@ -828,6 +828,7 @@
   };
 
   /**
+   * 透视投影
    * Generates a perspective projection matrix with the given bounds
    *
    * @param {number} fovy Vertical field of view
@@ -845,6 +846,7 @@
   };
 
   /**
+   * 正射投影
    * Generates a orthogonal projection matrix with the given bounds
    *
    * @param {number} left Left bound of the frustum
